@@ -26,43 +26,115 @@ let wait = setInterval(() => {
 }, 100)
 
 
+let storage
+let names = {}
+
+let lastTwoRootsRemoved = []
+let lastTwoRootsAdded = []
+
+
 function main() {
+  storage = window.Sifrr.Storage.getStorage('indexeddb')
+  
   initNames()
+  const graphLayer = Dock.layers.getByType('segmentation_with_graph', false)[0]
+  if (graphLayer) {
+    const displayState = graphLayer.layer.displayState
+    displayState.rootSegments.changed.add((rootId, added) => {
+      if (added) {
+        if (Array.isArray(rootId)) {
+          rootId.forEach(id => {
+            lastTwoRootsAdded.push(id.toString())
+          })
+        }
+        else {
+          lastTwoRootsAdded.push(rootId.toString())
+        }
 
-  document.addEventListener('fetch', result => {
-    if (!result.detail.url.includes('/root?')) return
+        while (lastTwoRootsAdded.length > 2) {
+          lastTwoRootsAdded.shift()
+        }
 
+      }
+      else {
+        if (lastTwoRootsRemoved.length === 2) {
+          lastTwoRootsRemoved.shift()
+        }
+        lastTwoRootsRemoved.push(rootId.toString())
+      }
+    })
+  }
+
+  document.addEventListener('fetch', e => {
+    const response = e.detail.response
+    const url = e.detail.url
+    const params = e.detail.params
+
+    if (!url.includes('split?') && !url.includes('merge?')) return
+
+    const newRootId1 = response.new_root_ids[0]
+    const newRootId2 = response.new_root_ids[1]
+    
+    if (url.includes('split?')) {
+      const potentialName = names[lastTwoRootsRemoved[1]]
+      if (!potentialName) return
+
+      delete names[lastTwoRootsRemoved[1]]
+      names[newRootId1] = potentialName
+      names[newRootId2] = potentialName
+      saveToLS(initNames)
+    }
+    else if (url.includes('merge?')) {
+      const potentialName1 = names[lastTwoRootsRemoved[0]]
+      const potentialName2 = names[lastTwoRootsRemoved[1]]
+      const newRootId = response.new_root_ids[0]
+      let newName
+
+      if (!potentialName1 && !potentialName2) return
+    
+        if (potentialName1 && potentialName2) {
+          newName = potentialName1 + '+' + potentialName2
+        }
+        else {
+          newName = potentialName1 || potentialName2
+        }
+
+        delete names[lastTwoRootsRemoved[0]]
+        delete names[lastTwoRootsRemoved[1]]
+        names[newRootId] = newName
+        saveToLS(initNames)
+    }
   })
 
   document.addEventListener('contextmenu', e => changeName(e))
 }
 
 
-let names = {}
-
-
-function saveToLS() {
-  Dock.ls.set('names-history', names, true)
+function saveToLS(callback) {
+  storage.set('kk-names-history', { value: names }).then(() => callback && callback())
 }
 
 
-function getFromLS() {
-  names = Dock.ls.get('names-history', true)
-  if (!names) {
-    names = {}
-  }
+function getFromLS(callback) {
+  storage.get('kk-names-history').then(values => {
+    names = values ? values['kk-names-history'] : {}
+    if (!names) {
+      names = {}
+    }
+    callback && callback()
+  })
 }
 
 
 function initNames() {
-  getFromLS()
-
-  let buttons = document.getElementsByClassName('segment-button')
-  buttons.forEach(button => {
-    const name = names[button.dataset.segId]
-    if (name) {
-      button.textContent = name
-    }
+  getFromLS(() => {
+    let buttons = document.getElementsByClassName('segment-button')
+    buttons.forEach(button => {
+      const name = names[button.dataset.segId]
+      if (name) {
+        button.textContent = name
+      }
+    })
   })
 }
 
@@ -81,10 +153,18 @@ function changeName(e) {
   }).show()
 
   function okCallback() {
-    const newName = document.getElementById('kk-utilities-new-segment-name').value
+    let newName = document.getElementById('kk-utilities-new-segment-name').value
     const id = el.dataset.segId
+
+    if (!newName) {
+      newName = id
+      delete names[id]
+    }
+    else {
+      names[id] = newName
+    }
+    
     el.textContent = newName
-    names[id] = newName
     saveToLS()
   }
 }
