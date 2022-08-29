@@ -143,7 +143,7 @@ function changeName(e) {
   if (!e.ctrlKey) return
 
   const el = e.target
-  if (!el.target.classList.contains('segment-button')) return
+  if (!el.classList.contains('segment-button')) return
 
   const name = el.textContent
   Dock.dialog({
