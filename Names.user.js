@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Names
 // @namespace    KrzysztofKruk-FlyWire
-// @version      0.1
+// @version      0.1.1
 // @description  Allows adding local names to segments
 // @author       Krzysztof Kruk
 // @match        https://ngl.flywire.ai/*
@@ -143,6 +143,8 @@ function changeName(e) {
   if (!e.ctrlKey) return
 
   const el = e.target
+  if (!el.target.classList.contains('segment-button')) return
+
   const name = el.textContent
   Dock.dialog({
     id: 'kk-utilities-edit-segment-name',
