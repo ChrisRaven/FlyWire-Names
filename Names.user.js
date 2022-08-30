@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Names
 // @namespace    KrzysztofKruk-FlyWire
-// @version      0.1.3
+// @version      0.1.4
 // @description  Allows adding local names to segments
 // @author       Krzysztof Kruk
 // @match        https://ngl.flywire.ai/*
@@ -91,10 +91,11 @@ function main() {
     const newRootId2 = response.new_root_ids[1]
     
     if (url.includes('split?')) {
-      const potentialName = names[lastTwoRootsRemoved[1]]
+      let index = lastTwoRootsRemoved.length - 1
+      const potentialName = names[lastTwoRootsRemoved[index]]
       if (!potentialName) return
 
-      delete names[lastTwoRootsRemoved[1]]
+      delete names[lastTwoRootsRemoved[index]]
       names[newRootId1] = potentialName
       names[newRootId2] = potentialName
       saveToLS(initNames)
