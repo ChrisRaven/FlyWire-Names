@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Names
 // @namespace    KrzysztofKruk-FlyWire
-// @version      0.1.1
+// @version      0.1.2
 // @description  Allows adding local names to segments
 // @author       Krzysztof Kruk
 // @match        https://ngl.flywire.ai/*
@@ -54,7 +54,7 @@ function main() {
         while (lastTwoRootsAdded.length > 2) {
           lastTwoRootsAdded.shift()
         }
-
+        initNames()
       }
       else {
         if (lastTwoRootsRemoved.length === 2) {
