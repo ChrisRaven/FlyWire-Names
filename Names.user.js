@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Names
 // @namespace    KrzysztofKruk-FlyWire
-// @version      0.1.2
+// @version      0.1.3
 // @description  Allows adding local names to segments
 // @author       Krzysztof Kruk
 // @match        https://ngl.flywire.ai/*
@@ -31,12 +31,12 @@ let names = {}
 
 let lastTwoRootsRemoved = []
 let lastTwoRootsAdded = []
+let waitingForTabChange = false
 
 
 function main() {
   storage = window.Sifrr.Storage.getStorage('indexeddb')
   
-  initNames()
   const graphLayer = Dock.layers.getByType('segmentation_with_graph', false)[0]
   if (graphLayer) {
     const displayState = graphLayer.layer.displayState
@@ -63,6 +63,21 @@ function main() {
         lastTwoRootsRemoved.push(rootId.toString())
       }
     })
+
+    let waitForTabsCreation = setInterval(() => {
+      if (!graphLayer.layer || !graphLayer.layer.tabs) return
+
+      graphLayer.layer.tabs.changed.add(() => {
+        if (waitingForTabChange && graphLayer.layer.tabs.value === 'rendering') {
+          waitingForTabChange = false
+          initNames()
+        }
+      })
+
+      initNames()
+      clearInterval(waitForTabsCreation)
+    })
+
   }
 
   document.addEventListener('fetch', e => {
@@ -93,7 +108,12 @@ function main() {
       if (!potentialName1 && !potentialName2) return
     
         if (potentialName1 && potentialName2) {
-          newName = potentialName1 + '+' + potentialName2
+          if (potentialName1 === potentialName2) {
+            newName = potentialName1
+          }
+          else {
+            newName = potentialName1 + '+' + potentialName2
+          }
         }
         else {
           newName = potentialName1 || potentialName2
@@ -128,13 +148,24 @@ function getFromLS(callback) {
 
 function initNames() {
   getFromLS(() => {
-    let buttons = document.getElementsByClassName('segment-button')
-    buttons.forEach(button => {
-      const name = names[button.dataset.segId]
-      if (name) {
-        button.textContent = name
-      }
-    })
+    const graphLayerTabs = Dock.layers.getByType('segmentation_with_graph', false)[0].layer.tabs
+    if (graphLayerTabs.value !== 'rendering') {
+      waitingForTabChange = true
+      return
+    }
+    
+    fillButtons()
+  })
+}
+
+
+function fillButtons() {
+  let buttons = document.getElementsByClassName('segment-button')
+  buttons.forEach(button => {
+    const name = names[button.dataset.segId]
+    if (name) {
+      button.textContent = name
+    }
   })
 }
 
