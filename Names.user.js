@@ -31,7 +31,7 @@ let names = {}
 
 let lastTwoRootsRemoved = []
 let lastTwoRootsAdded = []
-let waitingForTabChange = false
+// let waitingForTabChange = false
 
 
 function main() {
@@ -42,13 +42,13 @@ function main() {
     const displayState = graphLayer.layer.displayState
     displayState.rootSegments.changed.add((rootId, added) => {
       if (added) {
-        if (Array.isArray(rootId)) {
+        if (Array.isArray(rootId) && rootId.length) {
           rootId.forEach(id => {
             lastTwoRootsAdded.push(id.toString())
           })
         }
         else {
-          lastTwoRootsAdded.push(rootId.toString())
+          rootId && lastTwoRootsAdded.push(rootId.toString())
         }
 
         while (lastTwoRootsAdded.length > 2) {
@@ -60,23 +60,25 @@ function main() {
         if (lastTwoRootsRemoved.length === 2) {
           lastTwoRootsRemoved.shift()
         }
-        lastTwoRootsRemoved.push(rootId.toString())
+        // TODO: Cannot read properties of null (reading 'toString') (when clearing list)
+        rootId && lastTwoRootsRemoved.push(rootId.toString())
       }
     })
 
-    let waitForTabsCreation = setInterval(() => {
-      if (!graphLayer.layer || !graphLayer.layer.tabs) return
+    Dock.addToRightTab('segmentation_with_graph', 'Rendering', initNames)
+    // let waitForTabsCreation = setInterval(() => {
+    //   if (!graphLayer.layer || !graphLayer.layer.tabs) return
 
-      graphLayer.layer.tabs.changed.add(() => {
-        if (waitingForTabChange && graphLayer.layer.tabs.value === 'rendering') {
-          waitingForTabChange = false
-          initNames()
-        }
-      })
+    //   graphLayer.layer.tabs.changed.add(() => {
+    //     if (waitingForTabChange && graphLayer.layer.tabs.value === 'rendering') {
+    //       waitingForTabChange = false
+    //       initNames()
+    //     }
+    //   })
 
-      initNames()
-      clearInterval(waitForTabsCreation)
-    })
+    //   initNames()
+    //   clearInterval(waitForTabsCreation)
+    // })
 
   }
 
@@ -84,7 +86,7 @@ function main() {
     const response = e.detail.response
     const url = e.detail.url
     const params = e.detail.params
-
+// TODO: Uncaught TypeError: Cannot read properties of undefined (reading '0') (prawdopdobnie w innych miejscach również)
     if (!url.includes('split?') && !url.includes('merge?')) return
 
     const newRootId1 = response.new_root_ids[0]
