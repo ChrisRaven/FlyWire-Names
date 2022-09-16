@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Organizer
+// @name         Names
 // @namespace    KrzysztofKruk-FlyWire
-// @version      1.0
-// @description  Allows adding local names to segments and creating local groups
+// @version      0.1.4
+// @description  Allows adding local names to segments
 // @author       Krzysztof Kruk
 // @match        https://ngl.flywire.ai/*
 // @grant        none
@@ -17,7 +17,7 @@ if (!document.getElementById('dock-script')) {
   script.src = typeof DEV !== 'undefined' ? 'http://127.0.0.1:5501/FlyWire-Dock/Dock.js' : 'https://chrisraven.github.io/FlyWire-Dock/Dock.js'
   document.head.appendChild(script)
 }
-console.log('organizer')
+
 let wait = setInterval(() => {
   if (globalThis.dockIsReady) {
     clearInterval(wait)
@@ -28,22 +28,15 @@ let wait = setInterval(() => {
 
 let storage
 let names = {}
-let groups = {}
 
 let lastTwoRootsRemoved = []
 let lastTwoRootsAdded = []
+// let waitingForTabChange = false
 
 
 function main() {
   storage = window.Sifrr.Storage.getStorage('indexeddb')
-  storage.set('kk-groups', {value: [{title: 'group1', children: ['720575940618736542', '720575940617007965']}, {title: 'other group', children: ['720575940610373496', '720575940625870142', '720575940628144113']}, {title: 'empty group', children: []}]}) // TEMP
   
-  let dock = new Dock()
-
-  dock.addAddon({
-    css: generateCss()
-  })
-
   const graphLayer = Dock.layers.getByType('segmentation_with_graph', false)[0]
   if (graphLayer) {
     const displayState = graphLayer.layer.displayState
@@ -73,6 +66,20 @@ function main() {
     })
 
     Dock.addToRightTab('segmentation_with_graph', 'Rendering', initNames)
+    // let waitForTabsCreation = setInterval(() => {
+    //   if (!graphLayer.layer || !graphLayer.layer.tabs) return
+
+    //   graphLayer.layer.tabs.changed.add(() => {
+    //     if (waitingForTabChange && graphLayer.layer.tabs.value === 'rendering') {
+    //       waitingForTabChange = false
+    //       initNames()
+    //     }
+    //   })
+
+    //   initNames()
+    //   clearInterval(waitForTabsCreation)
+    // })
+
   }
 
   document.addEventListener('fetch', e => {
@@ -126,73 +133,19 @@ function main() {
 }
 
 
-function saveToLS(callback, what = 'all') {
-  const namesPromise = storage.set('kk-names-history', { value: names })
-  const groupsPromise = storage.set('kk-groups', { value: groups })
-
-  function setNames() {
-    namesPromise.then(() => {
-      if (what === 'all') return
-
-      callback && callback()
-    })
-  }
-
-  function setGroups() {
-    groupsPromise.then(() => {
-      if (what === 'all') return
-
-      callback && callback()
-    })
-  }
-  
-  const both = Promise.all([namesPromise, groupsPromise])
-
-  switch (what) {
-    case 'names': setNames(); break
-    case 'groups': setGroups(); break
-    case 'all': setNames(); setGroups(); both.then(callback && callback); break
-    default: setNames(); setGroups(); both.then(callback && callback); break
-  }
+function saveToLS(callback) {
+  storage.set('kk-names-history', { value: names }).then(() => callback && callback())
 }
 
 
-function getFromLS(callback, what = 'all') {
-  const namesPromise = storage.get('kk-names-history')
-  const groupsPromise = storage.get('kk-groups')
-  function getNames() {
-    namesPromise.then(values => {
-      names = values ? values['kk-names-history'] : {}
-      if (!names) {
-        names = {}
-      }
-      if (what === 'all') return
-
-      callback && callback()
-    })
-  }
-
-  function getGroups() {
-    groupsPromise.then(values => {
-      groups = values ? values['kk-groups'] : {}
-      if (!groups) {
-        groups = {}
-      }
-      if (what === 'all') return
-
-      callback && callback()
-    })
-  }
-
-    
-  const both = Promise.all([namesPromise, groupsPromise])
-
-  switch (what) {
-    case 'names': getNames(); break
-    case 'groups': getGroups(); break
-    case 'all': getNames(); getGroups(); both.then(callback && callback); break
-    default: getNames(); getGroups(); both.then(callback && callback); break
-  }
+function getFromLS(callback) {
+  storage.get('kk-names-history').then(values => {
+    names = values ? values['kk-names-history'] : {}
+    if (!names) {
+      names = {}
+    }
+    callback && callback()
+  })
 }
 
 
@@ -204,164 +157,8 @@ function initNames() {
       return
     }
     
-    createGroups()
     fillButtons()
   })
-}
-
-
-function addNewGroupButton() {
-  const button = document.createElement('button')
-  button.textContent = 'New Group'
-  const addSegmentField = document.getElementsByClassName('add-segment')[0]
-  if (!addSegmentField) return
-
-  addSegmentField.parentNode.appendChild(button)
-  button.addEventListener('click', () => {
-    Dock.dialog({
-      id: 'kk-organizer-new-group-name-dialog',
-      html: 'New group\'s name: <input id="kk-organizer-new-group-name">',
-      okCallback: createNewGroup,
-      destroyAfterClosing: true,
-      okLabel: 'Create',
-      cancelCallback: () => {}
-    }).show()
-  })
-
-  function createNewGroup() {
-    const input = document.getElementById('kk-organizer-new-group-name')
-    const name = input.value
-    if (!name) return
-
-
-    groups.push({title: name, children: []})
-    
-    saveToLS(null, 'groups')
-    createGroup(name)
-  }
-}
-
-
-function addEmptyGroupContent(parent) {
-  const empty = document.createElement('div')
-  empty.classList.add('kk-organizer-empty')
-  empty.textContent = '(empty)'
-  parent.appendChild(empty)
-}
-
-
-function createGroup(name, children, idToNode) {
-  const wrapper = document.createElement('div')
-  const title = document.createElement('div')
-
-  wrapper.classList.add('kk-organizer-group')
-  title.textContent = name
-  wrapper.appendChild(title)
-
-  if (children && children.length) {
-    children.forEach(child => {
-      const node = idToNode[child]
-      if (!node) return
-
-      wrapper.appendChild(node)
-    })
-  }
-  else {
-    addEmptyGroupContent(wrapper)
-  }
-
-  const container = document.getElementsByClassName('item-container')[0]
-  if (!container) return
-
-  let prev = container.firstChild.nextSibling
-  if (document.getElementById('kk-utilities-action-menu')) {
-    prev = prev.nextSibling
-  }
-
-  addChangeGroupNameButton(wrapper)
-  addDeleteGroupButton(wrapper)
-  // TODO: add button "Change color of all segments"
-  container.insertBefore(wrapper, prev)
-}
-
-
-function addChangeGroupNameButton(wrapper) {
-  const button = document.createElement('button')
-  button.textContent = 'Rename'
-  button.addEventListener('click', e => changeGroupNameHandler)
-  wrapper.appendChild(button)
-}
-
-
-function addDeleteGroupButton(wrapper) {
-  const button = document.createElement('button')
-  button.textContent = 'Delete'
-  button.addEventListener('click', e => deleteGroupHandler)
-  wrapper.appendChild(button)
-}
-
-
-function changeGroupNameHandler(e) {
-  const group = e.target.parentNode
-  Dock.dialog({
-    id: 'kk-organizer-change-group-name',
-    html: 'New name: <input id="kk-organizer-change-group-name-input">',
-    okCallback: saveChange,
-    okLabel: 'Save',
-    cancelCallback: () => {},
-    destroyAfterClosing: true
-  }).show()
-
-  function saveChange() {
-    const newName = document.getElementById('kk-organizer-change-group-name-input').value
-    if (!newName) return
-
-    // TODO: update name in HTML
-    // TODO: update name in "groups"
-    // TODO: save changes to "kk-groups"
-  }
-}
-
-
-function deleteGroupHandler(e) {
-  const group = e.target.parentNode
-
-  Dock.dialog({
-    id: 'kk-organizer-delete-group',
-    html: 'Do you really want to delete this group? (all the segments will be moved to the end of the segments\' list)',
-    okCallback: deleteGroup,
-    okLabel: 'Delete',
-    cancelCallback: () => {},
-    destroyAfterClosing: true
-  }).show()
-
-  function deleteGroup() {
-    // TODO: move segments to the end
-    // TODO: remove group from HTML
-    // TODO: remove group from "groups"
-    // TODO: save changes to "kk-groups"
-  }
-}
-
-// TODO: make all the groups' names unique (also in the iDB and in HTML)
-// TODO: create button to move all selected segments to selected group
-function createGroups() {
-  addNewGroupButton()
-
-  if (!groups || !Object.keys(groups)) return
-
-  const segments = document.getElementsByClassName('segment-button')
-  const idToNode = {}
-  for (const seg of segments) {
-    idToNode[seg.dataset.segId] = seg.parentNode
-  }
-
-  if (document.getElementsByClassName('kk-organizer-group').length) return
-
-  for (let i = groups.length - 1; i >= 0; i--) {
-    const group = groups[i]
-    createGroup(group.title, group.children, idToNode)
-  }
 }
 
 
@@ -406,19 +203,4 @@ function changeName(e) {
     el.textContent = newName
     saveToLS()
   }
-}
-
-
-function generateCss() {
-  return /*css*/`
-    .kk-organizer-group {
-      width: 100%;
-    }
-
-    .kk-organizer-empty {
-      font-style: italic;
-      color: gray;
-      padding: 5px;
-    }
-  `
 }
