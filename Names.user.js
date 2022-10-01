@@ -33,49 +33,192 @@ let groups = {}
 let lastTwoRootsRemoved = []
 let lastTwoRootsAdded = []
 
+let root
+let displayState
+
 
 function main() {
   storage = window.Sifrr.Storage.getStorage('indexeddb')
-  storage.set('kk-groups', {value: [{title: 'group1', children: ['720575940618736542', '720575940617007965']}, {title: 'other group', children: ['720575940610373496', '720575940625870142', '720575940628144113']}, {title: 'empty group', children: []}]}) // TEMP
-  
-  let dock = new Dock()
+  storage.set('kk-organizer', {
+    value: {
+      id: '1',
+      name: 'root',
+      children: {
+        groups: {
+          '4x': {
+            name: 'group1',
+            id: '4x',
+            color: '#00FF00',
+            expanded: true,
+            isSelected: false,
+            children: {
+              groups: {},
+              segments: {
+                '720575940618736542': {
+                  id: '720575940618736542',
+                  name: 'abc',
+                  isSelected: false
+                },
+                '720575940617007965': {
+                  id: '720575940617007965',
+                  name: 'Cd',
+                  isSelected: true
+                }
+              }
+            }
+          },
+          '2x': {
+            name: 'other group',
+            id: '2x',
+            children: {
+              groups: {
+                '5x': {
+                  name: 'subgroup',
+                  id: '5x',
+                  children: {
+                    groups: {},
+                    segments: {}
+                  },
+                  color: '#FFFFFF',
+                  expanded: true,
+                  isSelected: false
+                },
+                '6a': {
+                  name: 'subgroup',
+                  id: '6a',
+                  children: {
+                    groups: {},
+                    segments: {
+                      '720575940610373497': {
+                        id: '720575940610373497',
+                        name: 'probably outdated',
+                        isSelected: false
+                      }
+                    }
+                  },
+                  color: '#FFFFFF',
+                  expanded: true,
+                  isSelected: false
+                }
+              },
+              segments: {
+                '720575940610373496': {
+                  id: '720575940610373496',
+                  name: '',
+                  isSelected: false
+                },
+                '720575940625870142': {
+                  id: '720575940625870142',
+                  name: '',
+                  isSelected: true
+                },
+                '720575940628144113': {
+                  id: '720575940628144113',
+                  name: 'longer name',
+                  isSelected: false
+                }
+              }
+            },
+            color: '#FFFF00',
+            expanded: false,
+            isSelected: false
+          },
+          '3x': {
+            name: 'empty group',
+            id: '3x',
+            children: {
+              groups: {},
+              segments: {}
+            },
+            color: '#FFFFFF',
+            expanded: true,
+            isSelected: false
+          }
+        },
+        segments: {
+          '720575940610373498': {
+            id: '720575940610373498',
+            name: '',
+            isSelected: false
+          },
+          '720575940625870143': {
+            id: '720575940625870143',
+            name: '',
+            isSelected: true
+          },
+          '720575940628144114': {
+            id: '720575940628144114',
+            name: 'longer name',
+            isSelected: false
+          }
+        }
+      }
+    }
+  }) // TEMP
 
+  displayState = Dock.layers.getByType('segmentation_with_graph', false)[0].layer.displayState
+
+  const dock = new Dock()
   dock.addAddon({
     css: generateCss()
   })
+  storage.get('kk-organizer').then(res => {
+    const tree = res['kk-organizer']
+    root = new Group('root', null, 1, false)
 
-  const graphLayer = Dock.layers.getByType('segmentation_with_graph', false)[0]
-  if (graphLayer) {
-    const displayState = graphLayer.layer.displayState
-    displayState.rootSegments.changed.add((rootId, added) => {
-      if (added) {
-        if (Array.isArray(rootId) && rootId.length) {
-          rootId.forEach(id => {
-            lastTwoRootsAdded.push(id.toString())
-          })
+    generateTree(tree, root, () => {
+      // if there are still segments, that don't belong anywhere, add them as children of the root
+      // .querySelectorAll() because it's the only method, that returns a static Nodelist
+      document.querySelectorAll('.item-container > .segment-div').forEach(el => {
+        if (!el.dataset.id) {
+          el = el.getElementsByClassName('segment-button')[0]
+          root.addSegment('', el.dataset.segId)
         }
-        else {
-          rootId && lastTwoRootsAdded.push(rootId.toString())
-        }
-
-        while (lastTwoRootsAdded.length > 2) {
-          lastTwoRootsAdded.shift()
-        }
-        initNames()
-      }
-      else {
-        if (lastTwoRootsRemoved.length === 2) {
-          lastTwoRootsRemoved.shift()
-        }
-        // TODO: Cannot read properties of null (reading 'toString') (when clearing list)
-        rootId && lastTwoRootsRemoved.push(rootId.toString())
-      }
+      })
     })
 
-    Dock.addToRightTab('segmentation_with_graph', 'Rendering', initNames)
-  }
+    
 
-  document.addEventListener('fetch', e => {
+  
+    // root.node.addEventListener('click', e => {
+    //   if (e.target.classList.contains('kk-organizer-group-title')) {
+    //     eventHandlers.toggleGroup(e)
+    //   }
+    // })
+  }) 
+
+  function generateTree(parent, parentObj, callback) {
+    for (const group of Object.values(parent.children.groups)) {
+      const g = parentObj.addGroup(group.name, group.id, false)
+      if (Object.keys(group.children.groups).length) {
+        generateTree(group, g)
+      }
+    }
+
+    for (const segment of Object.values(parent.children.segments)) {
+      const s = parentObj.addSegment(segment.name, segment.id, false)
+    }
+
+    callback && callback()
+  }
+  
+
+
+  const eventHandlers = {
+    toggleGroup: e => {
+      // TODO: handle expanding/collapsing
+    },
+  }
+  
+
+    // Dock.addToRightTab('segmentation_with_graph', 'Rendering', initTree)
+  // }
+
+  // TEMP
+  document.getElementsByClassName('neuroglancer-viewer-top-row')[0].addEventListener('click', e => {
+    console.log(root)
+  })
+  document.addEventListener('fetch', e => {return // TEMP
     const response = e.detail.response
     const url = e.detail.url
     const params = e.detail.params
@@ -93,7 +236,7 @@ function main() {
       delete names[lastTwoRootsRemoved[index]]
       names[newRootId1] = potentialName
       names[newRootId2] = potentialName
-      saveToLS(initNames)
+      saveToiDB(initNames)
     }
     else if (url.includes('merge?')) {
       const potentialName1 = names[lastTwoRootsRemoved[0]]
@@ -118,293 +261,437 @@ function main() {
         delete names[lastTwoRootsRemoved[0]]
         delete names[lastTwoRootsRemoved[1]]
         names[newRootId] = newName
-        saveToLS(initNames)
+        saveToiDB(initNames)
     }
   })
 
-  document.addEventListener('contextmenu', e => changeName(e))
+  // document.addEventListener('contextmenu', e => changeName(e))
+}
+
+function saveToiDB() {
+  storage.set('kk-organizer', { value: root.toJSON() })
 }
 
 
-function saveToLS(callback, what = 'all') {
-  const namesPromise = storage.set('kk-names-history', { value: names })
-  const groupsPromise = storage.set('kk-groups', { value: groups })
-
-  function setNames() {
-    namesPromise.then(() => {
-      if (what === 'all') return
-
-      callback && callback()
-    })
+class Group {
+  children = {
+    groups: [],
+    segments: []
   }
+  parent = null
+  isSelected = false
+  name = ''
+  id = -1
+  node = null
+  navbar = null
+  type = 'group'
 
-  function setGroups() {
-    groupsPromise.then(() => {
-      if (what === 'all') return
-
-      callback && callback()
-    })
-  }
-  
-  const both = Promise.all([namesPromise, groupsPromise])
-
-  switch (what) {
-    case 'names': setNames(); break
-    case 'groups': setGroups(); break
-    case 'all': setNames(); setGroups(); both.then(callback && callback); break
-    default: setNames(); setGroups(); both.then(callback && callback); break
-  }
-}
-
-
-function getFromLS(callback, what = 'all') {
-  const namesPromise = storage.get('kk-names-history')
-  const groupsPromise = storage.get('kk-groups')
-  function getNames() {
-    namesPromise.then(values => {
-      names = values ? values['kk-names-history'] : {}
-      if (!names) {
-        names = {}
-      }
-      if (what === 'all') return
-
-      callback && callback()
-    })
-  }
-
-  function getGroups() {
-    groupsPromise.then(values => {
-      groups = values ? values['kk-groups'] : {}
-      if (!groups) {
-        groups = {}
-      }
-      if (what === 'all') return
-
-      callback && callback()
-    })
-  }
-
-    
-  const both = Promise.all([namesPromise, groupsPromise])
-
-  switch (what) {
-    case 'names': getNames(); break
-    case 'groups': getGroups(); break
-    case 'all': getNames(); getGroups(); both.then(callback && callback); break
-    default: getNames(); getGroups(); both.then(callback && callback); break
-  }
-}
-
-
-function initNames() {
-  getFromLS(() => {
-    const graphLayerTabs = Dock.layers.getByType('segmentation_with_graph', false)[0].layer.tabs
-    if (graphLayerTabs.value !== 'rendering') {
-      waitingForTabChange = true
-      return
+  constructor (name, parent, id, save = true) {
+    if (!id) {
+      id = Dock.getRandomAlphaString()
     }
-    
-    createGroups()
-    fillButtons()
-  })
-}
 
-
-function addNewGroupButton() {
-  const button = document.createElement('button')
-  button.textContent = 'New Group'
-  const addSegmentField = document.getElementsByClassName('add-segment')[0]
-  if (!addSegmentField) return
-
-  addSegmentField.parentNode.appendChild(button)
-  button.addEventListener('click', () => {
-    Dock.dialog({
-      id: 'kk-organizer-new-group-name-dialog',
-      html: 'New group\'s name: <input id="kk-organizer-new-group-name">',
-      okCallback: createNewGroup,
-      destroyAfterClosing: true,
-      okLabel: 'Create',
-      cancelCallback: () => {}
-    }).show()
-  })
-
-  function createNewGroup() {
-    const input = document.getElementById('kk-organizer-new-group-name')
-    const name = input.value
-    if (!name) return
-
-
-    groups.push({title: name, children: []})
-    
-    saveToLS(null, 'groups')
-    createGroup(name)
-  }
-}
-
-
-function addEmptyGroupContent(parent) {
-  const empty = document.createElement('div')
-  empty.classList.add('kk-organizer-empty')
-  empty.textContent = '(empty)'
-  parent.appendChild(empty)
-}
-
-
-function createGroup(name, children, idToNode) {
-  const wrapper = document.createElement('div')
-  const title = document.createElement('div')
-
-  wrapper.classList.add('kk-organizer-group')
-  title.textContent = name
-  wrapper.appendChild(title)
-
-  if (children && children.length) {
-    children.forEach(child => {
-      const node = idToNode[child]
-      if (!node) return
-
-      wrapper.appendChild(node)
-    })
-  }
-  else {
-    addEmptyGroupContent(wrapper)
-  }
-
-  const container = document.getElementsByClassName('item-container')[0]
-  if (!container) return
-
-  let prev = container.firstChild.nextSibling
-  if (document.getElementById('kk-utilities-action-menu')) {
-    prev = prev.nextSibling
-  }
-
-  addChangeGroupNameButton(wrapper)
-  addDeleteGroupButton(wrapper)
-  // TODO: add button "Change color of all segments"
-  container.insertBefore(wrapper, prev)
-}
-
-
-function addChangeGroupNameButton(wrapper) {
-  const button = document.createElement('button')
-  button.textContent = 'Rename'
-  button.addEventListener('click', e => changeGroupNameHandler)
-  wrapper.appendChild(button)
-}
-
-
-function addDeleteGroupButton(wrapper) {
-  const button = document.createElement('button')
-  button.textContent = 'Delete'
-  button.addEventListener('click', e => deleteGroupHandler)
-  wrapper.appendChild(button)
-}
-
-
-function changeGroupNameHandler(e) {
-  const group = e.target.parentNode
-  Dock.dialog({
-    id: 'kk-organizer-change-group-name',
-    html: 'New name: <input id="kk-organizer-change-group-name-input">',
-    okCallback: saveChange,
-    okLabel: 'Save',
-    cancelCallback: () => {},
-    destroyAfterClosing: true
-  }).show()
-
-  function saveChange() {
-    const newName = document.getElementById('kk-organizer-change-group-name-input').value
-    if (!newName) return
-
-    // TODO: update name in HTML
-    // TODO: update name in "groups"
-    // TODO: save changes to "kk-groups"
-  }
-}
-
-
-function deleteGroupHandler(e) {
-  const group = e.target.parentNode
-
-  Dock.dialog({
-    id: 'kk-organizer-delete-group',
-    html: 'Do you really want to delete this group? (all the segments will be moved to the end of the segments\' list)',
-    okCallback: deleteGroup,
-    okLabel: 'Delete',
-    cancelCallback: () => {},
-    destroyAfterClosing: true
-  }).show()
-
-  function deleteGroup() {
-    // TODO: move segments to the end
-    // TODO: remove group from HTML
-    // TODO: remove group from "groups"
-    // TODO: save changes to "kk-groups"
-  }
-}
-
-// TODO: make all the groups' names unique (also in the iDB and in HTML)
-// TODO: create button to move all selected segments to selected group
-function createGroups() {
-  addNewGroupButton()
-
-  if (!groups || !Object.keys(groups)) return
-
-  const segments = document.getElementsByClassName('segment-button')
-  const idToNode = {}
-  for (const seg of segments) {
-    idToNode[seg.dataset.segId] = seg.parentNode
-  }
-
-  if (document.getElementsByClassName('kk-organizer-group').length) return
-
-  for (let i = groups.length - 1; i >= 0; i--) {
-    const group = groups[i]
-    createGroup(group.title, group.children, idToNode)
-  }
-}
-
-
-function fillButtons() {
-  let buttons = document.getElementsByClassName('segment-button')
-  buttons.forEach(button => {
-    const name = names[button.dataset.segId]
-    if (name) {
-      button.textContent = name
+    if (!name) {
+      throw new Error('Name is required!')
     }
-  })
-}
 
+    this.id = id
+    this.name = name
+    this.parent = parent
 
-function changeName(e) {
-  if (!e.ctrlKey) return
-
-  const el = e.target
-  if (!el.classList.contains('segment-button')) return
-
-  const name = el.textContent
-  Dock.dialog({
-    id: 'kk-utilities-edit-segment-name',
-    html: '<input id="kk-utilities-new-segment-name" value="' + name + '">',
-    okCallback: okCallback,
-    okLabel: 'Save',
-    destroyAfterClosing: true
-  }).show()
-
-  function okCallback() {
-    let newName = document.getElementById('kk-utilities-new-segment-name').value
-    const id = el.dataset.segId
-
-    if (!newName) {
-      newName = id
-      delete names[id]
+    // TODO: change the below to separate functions adding each button
+    if (id === 1) { // root
+      this.node = document.getElementsByClassName('item-container')[0]
+      this.node.id = 'kk-organizer-root'
+      this.node.dataset.id = 1
+      this.node.dataset.name = 'root'
+      this.node.classList.add('kk-organizer-root')
     }
     else {
-      names[id] = newName
+      const groupNode = document.createElement('div')
+      groupNode.id = id
+      groupNode.dataset.id = id
+      groupNode.dataset.name = name
+      groupNode.classList.add('kk-organizer-group')
+      this.node = groupNode
+    }
+
+    const navBarNode = document.createElement('div')
+    navBarNode.classList.add('kk-organizer-group-navbar')
+
+    const titleNode = document.createElement('div')
+    titleNode.classList.add('kk-organizer-group-navbar-title')
+    titleNode.textContent = id === 1 ? '' : this.name
+    navBarNode.appendChild(titleNode)
+
+    const addGroupNode = document.createElement('div')
+    addGroupNode.classList.add('kk-organizer-group-navbar-addgroup')
+    addGroupNode.textContent = 'G'
+    addGroupNode.title = 'Add new group'
+    addGroupNode.addEventListener('click', e => {
+      this.interactiveAddGroup(this)
+    })
+    navBarNode.appendChild(addGroupNode)
+
+    const addSegmentsNode = document.createElement('div')
+    addSegmentsNode.classList.add('kk-organizer-group-navbar-addsegments')
+    addSegmentsNode.textContent = 'S'
+    addSegmentsNode.title = 'Add segments'
+    addSegmentsNode.addEventListener('click', e => {
+      this.interactiveAddSegments(this)
+    })
+    navBarNode.appendChild(addSegmentsNode)
+
+    const deleteNode = document.createElement('div')
+    deleteNode.classList.add('kk-organizer-group-navbar-delete')
+    deleteNode.textContent = 'D'
+    deleteNode.title = 'Delete'
+    deleteNode.addEventListener('click', e => {
+      this.interactiveDelete(this)
+    })
+    navBarNode.appendChild(deleteNode)
+
+    this.navBar = { node: navBarNode }
+    this.navBar.title = { node: titleNode }
+    this.navBar.newGroup = { node: addGroupNode }
+    this.navBar.addSegments = { node: navBarNode }
+    this.navBar.delete = { node: deleteNode }
+
+    if (this.id === 1) {
+      const saveToFileNode = document.createElement('div')
+      saveToFileNode.textContent = 'Sv'
+      saveToFileNode.title = 'Save to File'
+      saveToFileNode.addEventListener('click', e => {
+        this.saveToFile()
+      })
+      navBarNode.appendChild(saveToFileNode)
+
+      const openFromFileNode = document.createElement('input')
+      openFromFileNode.type = 'file'
+      openFromFileNode.title = 'Open from File'
+      openFromFileNode.addEventListener('change', e => {
+        this.readFromFile(e.target)
+        e.target.value = null
+      })
+      navBarNode.appendChild(openFromFileNode)
     }
     
-    el.textContent = newName
-    saveToLS()
+    this.node.appendChild(navBarNode)
+
+    if (save) {
+      saveToiDB()
+    }
+  }
+
+  interactiveAddGroup(parent, callback) {
+    Dock.dialog({
+      id: 'kk-organizer-create-new-group-dialog',
+      html: 'Type the name of the group <input id="kk-organizer-create-new-group-input">',
+      okCallback: () => {
+        const newName = document.getElementById('kk-organizer-create-new-group-input').value
+        if (!newName) {
+          throw new Error('Name cannot be empty')
+        }
+
+        const group = new Group(newName, parent)
+        callback && callback(group)
+        parent.children.groups[group.id] = group
+        parent.node.appendChild(group.node)
+      },
+      okLabel: 'create',
+      cancelCallback: () => {},
+      destroyAfterClosing: true
+    }).show()
+  }
+
+  interactiveAddSegments(parent, callback) {
+    const okCallback = () => {
+      let newSegments = document.getElementById('kk-organizer-add-segments-input').value
+      if (!newSegments) return
+
+      newSegments = newSegments.split(/[\s,]+/)
+
+      let counter = newSegments.length
+      if (!counter) return
+
+      function count() {
+        if (!counter--) {
+          callback && callback()
+        }
+      }
+
+      newSegments.forEach(id => {
+        let seg = this.getNodeById(id)
+        if (seg) {
+          Helpers.move(seg, parent)
+          count()
+        }
+        else {
+          seg = new Segment(this, id, '', true, seg => {
+            parent.children.segments[id] = seg
+            parent.node.appendChild(seg.node)
+            count()
+          })
+        }
+      })
+    }
+
+    Dock.dialog({
+      id: 'kk-organizer-add-segments-dialog',
+      html: 'Type segments\' IDs (separated by commas or spaces) <input id="kk-organizer-add-segments-input">',
+      okCallback: okCallback,
+      okLabel: 'Add',
+      cancelCallback: () => {},
+      destroyAfterClosing: true
+    }).show()
+  }
+
+  interactiveDelete() {
+    const okCallback = () => {
+      this.delete()
+    }
+
+    Dock.dialog({
+      id: 'kk-organizer-delete-dialog',
+      html: 'Are you sure, you want to delete this group?',
+      okCallback: okCallback,
+      okLabel: 'Delete',
+      cancelCallback: () => {},
+      destroyAfterClosing: true
+    }).show()
+  }
+
+  getNodeById(id) {
+    const segmentPatch = document.querySelector(`[data-seg-id="${id}"]`)
+    if (!segmentPatch) return null
+
+    return segmentPatch.parentNode
+  }
+
+  addGroup(name, id, save = true) {
+    const group = new Group(name, this, id, save)
+    this.children.groups[id] = group
+    this.children.groups = { ...this.children.groups } // FIXME: why it has to be that way?
+    this.node.appendChild(group.node)
+
+    return group
+  }
+
+  addSegment(name, id, save = true, callback) {
+    const segment = new Segment(this, id, name, save, seg => {
+      this.children.segments[id] = seg
+      this.children.segments = { ...this.children.segments } // FIXME: why it has to be that way?
+      this.node.appendChild(seg.node)
+      callback && callback(seg)
+    })
+  }
+
+  delete() {
+    if (this.id === 1) return // root
+
+    for (const group of Object.values(this.children.groups)) {
+      group.delete()
+    }
+
+    for (const segment of Object.values(this.children.segments)) {
+      segment.delete()
+    }
+
+    this.children.groups = []
+    this.children.segments = []
+
+    this.parent.children.groups[this.id].node.remove()
+    delete this.parent.children.groups[this.id]
+  }
+
+  getRoot() {
+    let id = this.id
+    let obj = this
+    while (id !== 1) {
+      obj = obj.parent
+      id = obj.id
+    }
+
+    return obj
+  }
+
+  toJSON() {
+    const getChildrenGroups = () => {
+      let entries = {}
+
+      let groups = Object.values(this.children.groups)
+      if (groups.length) {
+        for (const group of groups) {
+          // Source: https://stackoverflow.com/a/47116829
+          entries = {...entries, ...group.toJSON()}
+        }
+      }
+
+      return entries
+    }
+
+    const getChildrenSegments = () => {
+      let entries = {}
+
+      let segments = Object.values(this.children.segments)
+      if (segments.length) {
+        for (const segment of segments) {
+          // Source: https://stackoverflow.com/a/47116829
+          entries = {...entries, ...segment.toJSON()}
+        }
+      }
+
+      return entries
+    }
+
+    return {
+      [this.id]: {
+        id: this.id,
+        name: this.name,
+        isSelected: this.isSelected,
+        type: this.type,
+        children: {
+          groups: getChildrenGroups(),
+          segments: getChildrenSegments()
+        }
+      }
+    }
+  }
+
+  // Source: https://code-boxx.com/create-save-files-javascript/
+  saveToFile() {
+    let data = root.toJSON()
+    data = JSON.stringify(data)
+
+    const a = document.createElement('a')
+    a.href = window.URL.createObjectURL(new Blob([data], { type: 'text/plain' }))
+    a.download = 'save.fwo'
+    a.click()
+  }
+
+  readFromFile(input) {
+    const reader = new FileReader()
+    reader.addEventListener('load', e => {
+      console.log(e.target.result)
+    })
+    reader.readAsText(input.files[0])
+  }
+}
+
+const Helpers = {
+  findSegment(where, type, id) {
+    let result = null
+    where.children[type + 's'].some(el => {
+      const comparison = el.id === id
+      if (comparison) {
+        result = el
+      }
+
+      return comparison
+    })
+
+    if (!result) {
+      where.children.groups.some(el => {
+        result = Helpers.findSegment(el, type, id)
+        return result
+      })
+    }
+
+    return result
+  },
+
+  move: (element, parent) => {
+    if (element instanceof HTMLElement) {
+      element = Helpers.findSegment(root, 'segment', element.dataset.id)
+    }
+
+    const type = element.type + 's'
+    const id = element.node.getElementsByClassName('segment-button')[0].dataset.id
+
+    delete element.parent.children[type][id]
+    parent.children[type][id] = element
+    parent.node.appendChild(element.node)
+  }
+}
+
+
+class Segment {
+  parent = null
+  isSelected = false
+  name = ''
+  id = -1
+  node = null
+  id64 = new Uint64(this.id)
+  type = 'segment'
+
+  constructor (parent, id, name, save = true, callback) {
+    if (!id) {
+      throw new Error('ID is requred!')
+    }
+
+    if (!name) {
+      name = id
+    }
+
+    this.id = id
+    this.id64 = new Uint64(id)
+    this.name = name
+    this.parent = parent
+
+    const node = this.getNodeById(id)
+
+    if (!node) {
+      this.addToNeuroglancer(id, () => {
+        this.node = this.getNodeById(id)
+        if (!this.node) return console.log('Organizer: incorrect segment ID')
+
+        this.node.dataset.id = id
+        callback && callback(this)
+        if (save) {
+          saveToiDB()
+        }
+      })
+
+    }
+    else {
+      this.node = node
+      this.node.dataset.id = id
+      callback && callback(this)
+      if (save) {
+        saveToiDB()
+      }
+    }
+  }
+
+  addToNeuroglancer(id, callback) {
+    const removeListener = displayState.rootSegments.changed.add((segId, wasAdded) => {
+      if (!wasAdded || !Uint64.equal(segId, this.id64)) return
+
+      removeListener()
+      callback && callback()
+    })
+    displayState.rootSegments.add(this.id64)
+  }
+
+  getNodeById(id) {
+    const segmentPatch = document.querySelector(`button[data-seg-id="${id}"]`)
+    if (!segmentPatch) return null
+
+    return segmentPatch.parentNode
+  }
+
+  delete() {
+    displayState.rootSegments.delete(this.id64)
+    delete this.parent.children.segments[this.id]
+  }
+
+  toJSON() {
+    return {
+      id: this.id,
+      name: this.name,
+      isSelected: this.isSelected,
+      type: this.type
+    }
   }
 }
 
@@ -412,13 +699,26 @@ function changeName(e) {
 function generateCss() {
   return /*css*/`
     .kk-organizer-group {
-      width: 100%;
+      border-left: 1px solid white;
+      border-radius: 10px;
+      padding-left: 5px;
+      margin: 2px;
+      width: 90%;  
     }
 
-    .kk-organizer-empty {
-      font-style: italic;
-      color: gray;
-      padding: 5px;
+    .kk-organizer-group-navbar-title {
+      display: inline-block;
+    }
+
+    .kk-organizer-group-navbar-addsegments,
+    .kk-organizer-group-navbar-addgroup,
+    .kk-organizer-group-navbar-delete {
+      display: inline-block;
+      width: 10px;
+      background-color: #777;
+      padding: 0px 3px;
+      margin-left: 3px;
+      text-align: center;
     }
   `
 }
