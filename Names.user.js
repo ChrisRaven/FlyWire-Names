@@ -35,11 +35,12 @@ let lastTwoRootsAdded = []
 
 let root
 let displayState
+let initialized = false
 
 
 function main() {
   storage = window.Sifrr.Storage.getStorage('indexeddb')
-  storage.set('kk-organizer', {
+  /*storage.set('kk-organizer', {
     value: {
       id: '1',
       name: 'root',
@@ -154,7 +155,7 @@ function main() {
         }
       }
     }
-  }) // TEMP
+  })*/ // TEMP
 
   displayState = Dock.layers.getByType('segmentation_with_graph', false)[0].layer.displayState
 
@@ -166,43 +167,22 @@ function main() {
     const tree = res['kk-organizer']
     root = new Group('root', null, 1, false)
 
-    generateTree(tree, root, () => {
+    Helpers.generateTree(Object.values(tree)[0], root, () => {
       // if there are still segments, that don't belong anywhere, add them as children of the root
       // .querySelectorAll() because it's the only method, that returns a static Nodelist
       document.querySelectorAll('.item-container > .segment-div').forEach(el => {
         if (!el.dataset.id) {
           el = el.getElementsByClassName('segment-button')[0]
+
+          if (Helpers.findSegment(root, 'segment', el.dataset.segId)) return
+
           root.addSegment('', el.dataset.segId)
         }
       })
+      initialized = true
     })
 
-    
-
-  
-    // root.node.addEventListener('click', e => {
-    //   if (e.target.classList.contains('kk-organizer-group-title')) {
-    //     eventHandlers.toggleGroup(e)
-    //   }
-    // })
   }) 
-
-  function generateTree(parent, parentObj, callback) {
-    for (const group of Object.values(parent.children.groups)) {
-      const g = parentObj.addGroup(group.name, group.id, false)
-      if (Object.keys(group.children.groups).length) {
-        generateTree(group, g)
-      }
-    }
-
-    for (const segment of Object.values(parent.children.segments)) {
-      const s = parentObj.addSegment(segment.name, segment.id, false)
-    }
-
-    callback && callback()
-  }
-  
-
 
   const eventHandlers = {
     toggleGroup: e => {
@@ -211,14 +191,15 @@ function main() {
   }
   
 
-    // Dock.addToRightTab('segmentation_with_graph', 'Rendering', initTree)
+    Dock.addToRightTab('segmentation_with_graph', 'Rendering', master)
   // }
 
   // TEMP
   document.getElementsByClassName('neuroglancer-viewer-top-row')[0].addEventListener('click', e => {
     console.log(root)
+    console.log(root.toJSON())
   })
-  document.addEventListener('fetch', e => {return // TEMP
+  document.addEventListener('fetch', e => {
     const response = e.detail.response
     const url = e.detail.url
     const params = e.detail.params
@@ -236,7 +217,7 @@ function main() {
       delete names[lastTwoRootsRemoved[index]]
       names[newRootId1] = potentialName
       names[newRootId2] = potentialName
-      saveToiDB(initNames)
+      Helpers.saveToiDB(initNames)
     }
     else if (url.includes('merge?')) {
       const potentialName1 = names[lastTwoRootsRemoved[0]]
@@ -261,16 +242,48 @@ function main() {
         delete names[lastTwoRootsRemoved[0]]
         delete names[lastTwoRootsRemoved[1]]
         names[newRootId] = newName
-        saveToiDB(initNames)
+        Helpers.saveToiDB(initNames)
     }
   })
 
   // document.addEventListener('contextmenu', e => changeName(e))
 }
 
-function saveToiDB() {
-  storage.set('kk-organizer', { value: root.toJSON() })
+function master() {
+  if (!displayState.rootSegments.changed.listenerAdded) {
+    
+    displayState.rootSegments.changed.add((segId, wasAdded) => {
+      if (!initialized) return
+
+      if (wasAdded) {
+        root.addSegment('', segId.toString())
+      }
+      else {
+        if (!displayState.hiddenRootSegments.has(segId)) { // the segment in neither visible nor hidden
+          console.log('segment deleted')
+          Helpers.findSegment(root, 'segment', segId.toString()).delete()
+          Helpers.saveToiDB()
+        }
+      }
+    })
+
+    displayState.hiddenRootSegments.changed.add((segId, wasAdded) => {
+      if (!initialized) return
+      if (wasAdded) {
+        root.addSegment('', segId.toString())
+      }
+      else {
+        if (!displayState.rootSegments.has(segId)) { // the segment in neither visible nor hidden
+          console.log('hidden segment deleted')
+          Helpers.findSegment(root, 'segment', segId.toString()).delete()
+          Helpers.saveToiDB()
+        }
+      }
+    })
+    displayState.rootSegments.changed.listenerAdded = true
+  }
 }
+
 
 
 class Group {
@@ -357,29 +370,30 @@ class Group {
     this.navBar.addSegments = { node: navBarNode }
     this.navBar.delete = { node: deleteNode }
 
-    if (this.id === 1) {
-      const saveToFileNode = document.createElement('div')
-      saveToFileNode.textContent = 'Sv'
-      saveToFileNode.title = 'Save to File'
-      saveToFileNode.addEventListener('click', e => {
-        this.saveToFile()
-      })
-      navBarNode.appendChild(saveToFileNode)
+    const saveToFileNode = document.createElement('div')
+    saveToFileNode.textContent = 'Sv'
+    saveToFileNode.title = 'Save to File'
+    saveToFileNode.addEventListener('click', e => {
+      this.saveToFile(this)
+    })
+    navBarNode.appendChild(saveToFileNode)
 
-      const openFromFileNode = document.createElement('input')
-      openFromFileNode.type = 'file'
-      openFromFileNode.title = 'Open from File'
-      openFromFileNode.addEventListener('change', e => {
-        this.readFromFile(e.target)
-        e.target.value = null
-      })
-      navBarNode.appendChild(openFromFileNode)
-    }
+    const openFromFileNode = document.createElement('input')
+    openFromFileNode.type = 'file'
+    openFromFileNode.title = 'Open from File'
+    openFromFileNode.addEventListener('change', e => {
+      this.readFromFile(e.target, this)
+      e.target.value = null
+    })
+
+    this.navBar.saveToFile = { node: saveToFileNode }
+    this.navBar.openFromfile = { node: openFromFileNode }
+    navBarNode.appendChild(openFromFileNode)
     
     this.node.appendChild(navBarNode)
 
     if (save) {
-      saveToiDB()
+      Helpers.saveToiDB()
     }
   }
 
@@ -479,10 +493,16 @@ class Group {
 
   addSegment(name, id, save = true, callback) {
     const segment = new Segment(this, id, name, save, seg => {
-      this.children.segments[id] = seg
-      this.children.segments = { ...this.children.segments } // FIXME: why it has to be that way?
-      this.node.appendChild(seg.node)
-      callback && callback(seg)
+      let wasCreated = true
+      if (callback) {
+        let wasCreated = callback(seg)
+
+      }
+      if (wasCreated) {
+        this.children.segments[id] = seg
+        this.children.segments = { ...this.children.segments } // FIXME: why it has to be that way?
+        this.node.appendChild(seg.node)
+        }
     })
   }
 
@@ -559,8 +579,8 @@ class Group {
   }
 
   // Source: https://code-boxx.com/create-save-files-javascript/
-  saveToFile() {
-    let data = root.toJSON()
+  saveToFile(topNode = root) {
+    let data = topNode.toJSON()
     data = JSON.stringify(data)
 
     const a = document.createElement('a')
@@ -569,32 +589,40 @@ class Group {
     a.click()
   }
 
-  readFromFile(input) {
+  readFromFile(input, target) {
     const reader = new FileReader()
     reader.addEventListener('load', e => {
-      console.log(e.target.result)
+      const result = e.target.result
+      if (!result) return
+
+      let data = JSON.parse(result)
+      data = Object.values(data)[0]
+      Helpers.generateTree(data, target, Helpers.saveToiDB)
     })
     reader.readAsText(input.files[0])
   }
 }
-
+// TODO: some weird problem with segments being written all over the place
 const Helpers = {
   findSegment(where, type, id) {
     let result = null
-    where.children[type + 's'].some(el => {
-      const comparison = el.id === id
-      if (comparison) {
+
+    const values = Object.values(where.children[type + 's'])
+    for (let i = 0; i < values.length; i++) {
+      const el = values[i]
+      if (el.id === id) {
         result = el
+        break
       }
+    }
 
-      return comparison
-    })
+    const groups = Object.values(where.children.groups)
+    if (!result && groups.length) {
+      for (let i = 0; i < groups.length; i++) {
+        result = Helpers.findSegment(groups[i], type, id)
 
-    if (!result) {
-      where.children.groups.some(el => {
-        result = Helpers.findSegment(el, type, id)
-        return result
-      })
+        if (result) break
+      }
     }
 
     return result
@@ -605,12 +633,38 @@ const Helpers = {
       element = Helpers.findSegment(root, 'segment', element.dataset.id)
     }
 
+    if (element.parent === parent) return
+
     const type = element.type + 's'
-    const id = element.node.getElementsByClassName('segment-button')[0].dataset.id
+    const id = element.node.dataset.id
 
     delete element.parent.children[type][id]
     parent.children[type][id] = element
     parent.node.appendChild(element.node)
+    Helpers.saveToiDB()
+  },
+
+  // parent - in JSON structure
+// parentObj - in the "root" structure
+  generateTree: (parent, parentObj, callback) => {
+    if (parent.children.groups) {
+      for (const group of Object.values(parent.children.groups)) {
+        const g = parentObj.addGroup(group.name, group.id, false)
+        if (Object.keys(group.children.groups).length) {
+          Helpers.generateTree(group, g)
+        }
+      }
+    }
+
+    for (const segment of Object.values(parent.children.segments)) {
+      const s = parentObj.addSegment(segment.name, segment.id, false)
+    }
+
+    callback && callback()
+  },
+
+  saveToiDB: () => {
+    storage.set('kk-organizer', { value: root.toJSON() })
   }
 }
 
@@ -646,19 +700,24 @@ class Segment {
         if (!this.node) return console.log('Organizer: incorrect segment ID')
 
         this.node.dataset.id = id
-        callback && callback(this)
+        callback && callback(this, true) // 2nd parameter === true - segment was created; === false - segment was already existing and has been moved
         if (save) {
-          saveToiDB()
+          Helpers.saveToiDB()
         }
       })
-
     }
     else {
-      this.node = node
-      this.node.dataset.id = id
-      callback && callback(this)
-      if (save) {
-        saveToiDB()
+      const seg = Helpers.findSegment(root, 'segment', id)
+      if (seg) {
+        Helpers.move(seg, parent)
+      }
+      else {
+        this.node = node
+        this.node.dataset.id = id
+        callback && callback(this, false)
+        if (save) {
+          Helpers.saveToiDB()
+        }
       }
     }
   }
@@ -682,15 +741,18 @@ class Segment {
 
   delete() {
     displayState.rootSegments.delete(this.id64)
+    displayState.hiddenRootSegments.delete(this.id64)
     delete this.parent.children.segments[this.id]
   }
 
   toJSON() {
     return {
-      id: this.id,
-      name: this.name,
-      isSelected: this.isSelected,
-      type: this.type
+      [this.id]: {
+        id: this.id,
+        name: this.name,
+        isSelected: this.isSelected,
+        type: this.type
+      }
     }
   }
 }
@@ -722,3 +784,9 @@ function generateCss() {
     }
   `
 }
+
+// TODO: make "brackets" and group names in different colors - use the FW pallete and pure CSS
+// TODO: empty children are treated as arrays
+// TODO: when opening a page and segments from root are already in some subgroups, they are being moved back to the root, because they are treated as ungroupped
+// TODO: remove "delete" nad "rename" buttons from root
+// TODO: adding segments via the id field, when they were already added and in a group, moves them to the root and probably removes div.dataset.id
