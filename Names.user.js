@@ -17,7 +17,7 @@ if (!document.getElementById('dock-script')) {
   script.src = typeof DEV !== 'undefined' ? 'http://127.0.0.1:5501/FlyWire-Dock/Dock.js' : 'https://chrisraven.github.io/FlyWire-Dock/Dock.js'
   document.head.appendChild(script)
 }
-console.log('organizer')
+
 let wait = setInterval(() => {
   if (globalThis.dockIsReady) {
     clearInterval(wait)
