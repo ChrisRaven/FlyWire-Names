@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         Organizer
 // @namespace    KrzysztofKruk-FlyWire
-// @version      1.0
+// @version      1.0.0.1
 // @description  Allows adding local names to segments and creating local groups
 // @author       Krzysztof Kruk
 // @match        https://ngl.flywire.ai/*
+// @match        https://proofreading.flywire.ai/*
 // @grant        none
 // @updateURL    https://raw.githubusercontent.com/ChrisRaven/FlyWire-Names/main/Names.user.js
 // @downloadURL  https://raw.githubusercontent.com/ChrisRaven/FlyWire-Names/main/Names.user.js
